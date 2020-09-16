@@ -1,0 +1,41 @@
+DROP DATABASE IF EXISTS KaggleRetail;
+CREATE DATABASE KaggleRetail;
+USE KaggleRetail;
+
+CREATE TABLE Item_Categories (item_category_name VARCHAR(255),item_category_ID INT, PRIMARY KEY (item_category_ID));
+LOAD DATA LOCAL INFILE 'YOUR_DIRECTORY/item_categories.csv'
+INTO TABLE KaggleRetail.Item_Categories FIELDS TERMINATED BY ','
+ENCLOSED BY '"' LINES TERMINATED BY '\n'
+IGNORE 1 ROWS;
+
+CREATE TABLE Items (item_name VARCHAR(255), item_ID INT, item_category_ID INT, PRIMARY KEY (item_ID));
+LOAD DATA LOCAL INFILE 'YOUR_DIRECTORY/items.csv'
+INTO TABLE KaggleRetail.Items FIELDS TERMINATED BY ','
+ENCLOSED BY '"' LINES TERMINATED BY '\n'
+IGNORE 1 ROWS;
+
+CREATE TABLE Shops (shop_name VARCHAR(255), shop_ID INT, PRIMARY KEY (shop_ID));
+LOAD DATA LOCAL INFILE 'YOUR_DIRECTORY/shops.csv'
+INTO TABLE KaggleRetail.Shops FIELDS TERMINATED BY ','
+ENCLOSED BY '"' LINES TERMINATED BY '\n'
+IGNORE 1 ROWS;
+
+CREATE TABLE Sales_Train (cur_date DATE, cur_month INT, shop_ID INT, item_ID INT, item_price FLOAT, item_cnt INT);
+LOAD DATA LOCAL INFILE 'YOUR_DIRECTORY/sales_train.csv'
+INTO TABLE KaggleRetail.Sales_Train FIELDS TERMINATED BY ','
+ENCLOSED BY '"' LINES TERMINATED BY '\n'
+IGNORE 1 ROWS
+(@cur_date, cur_month, shop_ID, item_ID, item_price, item_cnt)
+SET cur_date = STR_TO_DATE(@cur_date, '%d.%m.%y');
+
+CREATE TABLE Sales_Test (ID INT, shop_ID INT, item_ID INT, PRIMARY KEY (ID));
+LOAD DATA LOCAL INFILE 'YOUR_DIRECTORY/test.csv'
+INTO TABLE KaggleRetail.Sales_Test FIELDS TERMINATED BY ','
+ENCLOSED BY '"' LINES TERMINATED BY '\n'
+IGNORE 1 ROWS;
+
+ALTER TABLE Items ADD FOREIGN KEY (item_category_ID) REFERENCES Item_Categories (item_category_ID) ON DELETE CASCADE;
+ALTER TABLE Sales_Train ADD FOREIGN KEY (shop_ID) REFERENCES Shops (shop_ID) ON DELETE CASCADE;
+ALTER TABLE Sales_Train ADD FOREIGN KEY (item_ID) REFERENCES Items (item_ID) ON DELETE CASCADE;
+ALTER TABLE Sales_Test ADD FOREIGN KEY (shop_ID) REFERENCES Shops (shop_ID) ON DELETE CASCADE;
+ALTER TABLE Sales_Test ADD FOREIGN KEY (item_ID) REFERENCES Items (item_ID) ON DELETE CASCADE;
