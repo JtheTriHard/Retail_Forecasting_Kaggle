@@ -1,8 +1,7 @@
 # Retail_Forecasting_Kaggle
 
-View progress here: https://trello.com/b/3RArR6un/retail-forecasting
-
-View the example Tableau visualizations here (in progress): https://public.tableau.com/profile/joey.gronovius#!/vizhome/Retail_Forecasting/AllStory
+View progress here: https://trello.com/b/3RArR6un/retail-forecasting 
+View the example Tableau visualizations here (in progress): https://public.tableau.com/profile/joey.gronovius#!/vizhome/Retail_Forecasting/MainStory
 ## Contents
 ### SQL
 Database_Builder.sql - script used to build MySQL relational database on a personal server.  
