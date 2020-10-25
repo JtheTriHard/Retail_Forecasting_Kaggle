@@ -22,7 +22,7 @@ print("Working Directory: ", os.getcwd())
 
 # =============================================================================
 # DATA CLEANING
-# NOTE: The following repeats some steps that were done thru SQL queries
+# NOTE: The following repeats some steps that were initially done in SQL queries
 
 # Import original Kaggle files
 df_items = pd.read_csv(r'YOUR_PATH\items.csv')
@@ -32,13 +32,15 @@ df_train = pd.read_csv(r'YOUR_PATH\sales_train.csv')
 df_test = pd.read_csv(r'YOUR_PATH\test.csv')
 df_sample = pd.read_csv(r'YOUR_PATH\sample_submission.csv')
 
-# Define important parameters
-n_shops = df_shops.shape[0]
-n_categories = df_itemcategories.shape[0]
-n_items = df_items.shape[0]
 
 # Remove returns/cancellations
 df_train = df_train[df_train['item_cnt_day'] >= 0]
+# Identify and remove outliers
+plt.figure()
+sns.boxplot(x=df_train['item_cnt_day'])
+df_train = df_train[df_train['item_cnt_day']<700]
+plt.figure()
+sns.boxplot(x=df_train['item_cnt_day'])
 # Convert str to datetime and sort
 df_train['date'] = pd.to_datetime(df_train['date'], format = '%d.%m.%Y')
 df_train = df_train.sort_values(['shop_id','date'], ascending = [True,True]).reset_index(drop=True)
@@ -66,6 +68,13 @@ for i in range(len(all_categories)):
 df_items = pd.merge(df_items, df_itemcategories[['item_category_id','new_category']], on='item_category_id')
 df_train = pd.merge(df_train, df_items[['item_id','new_category']], on='item_id')
 
+# Define important parameters
+n_shops = df_shops.shape[0]
+n_categories = df_itemcategories.shape[0]
+n_items = df_items.shape[0]
+
+# Merge duplicate stores: 10 <- 11, 23 -> 24, 39 <- 40
+df_train['shop_id'] = df_train['shop_id'].replace({11: 10, 23: 24, 40: 39})
 # Translate shop names from Russian to English
 #df_shops['shop_name'] = df_shops['shop_name'].apply(translator.translate, src='ru', dest='en').apply(getattr, args=('text',))
 # Keep only the city of the shop locations
@@ -75,7 +84,7 @@ df_shops['shop_name'] = df_shops['shop_name'].apply(lambda x: x.split()[0])
 df_shops['shop_name'].iloc[34:36] = 'Н Новгород'
 df_shops['shop_name'].iloc[39:42] = 'Ростов На Дону'
 # Retrieve coordinates of shops
-geolocator = Nominatim(user_agent = 'jgronovi@ucsd.edu')
+geolocator = Nominatim(user_agent = 'jgronovius@gmail.com')
 skip_shops = [9,12,55] # Non-address indices: Offsite Trade, Emergency Online Store, Digital Warehouse
 lat = []
 long = []
@@ -106,6 +115,7 @@ def month_as_date(df, start_year, start_month, end_year, end_month):
 # Aggregate monthly sales of shop-item pairings
 df_train['sales']= df_train['item_price'] * df_train['item_cnt_day']
 df_sales = df_train.groupby(['date_block_num', 'shop_id','item_id','new_category'],as_index=False).agg({'sales':'sum', 'item_cnt_day':'sum'})
+df_sales = pd.merge(df_sales, df_shops[['shop_id','lat','long']], on='shop_id')
 df_sales = month_as_date(df_sales, yr1, mth1, yr2, mth2)
 # Aggregate total monthly sales
 df_total = df_sales.groupby(['date_block_num'],as_index=False).agg({'sales':'sum', 'item_cnt_day':'sum'})
@@ -116,37 +126,35 @@ df_itemsales = df_itemsales.sort_values(['item_id','date_block_num'], ascending 
 df_categorysales = df_sales.groupby(['date_block_num','new_category'],as_index=False).agg({'sales':'sum', 'item_cnt_day':'sum'})
 df_categorysales = df_categorysales.sort_values(['new_category','date_block_num'], ascending = [True,True]).reset_index(drop=True)
 # Aggregate monthly sales of shop-category pairings
-df_shopcategorysales = df_sales.groupby(['date_block_num', 'shop_id','new_category'],as_index=False).agg({'sales':'sum', 'item_cnt_day':'sum'})
+df_shopcategorysales = df_sales.groupby(['date_block_num', 'shop_id','new_category'],as_index=False).agg({'sales':'sum', 'item_cnt_day':'sum', 'lat':'max', 'long':'max'})
 df_shopcategorysales = df_shopcategorysales.sort_values(['shop_id','new_category','date_block_num'], ascending = [True,True,True]).reset_index(drop=True)
 # Aggregate monthly sales per shop
-df_shopsales = df_sales.groupby(['date_block_num','shop_id'],as_index=False).agg({'sales':'sum', 'item_cnt_day':'sum'})
+df_shopsales = df_sales.groupby(['date_block_num','shop_id'],as_index=False).agg({'sales':'sum', 'item_cnt_day':'sum', 'lat':'max', 'long':'max'})
 df_shopsales = df_shopsales.sort_values(['shop_id','date_block_num'], ascending = [True,True]).reset_index(drop=True)
 
-# UNFINISHED: Fill missing months with zero
-# where period = month, filler = 0
-def fill_missing_dates(df, period, filler):
-    df_out = df.copy()
-    return df_out
-
 # ADF Test for Stationarity
-# For total sales
-result = adfuller(df_total['sales'].values, autolag=None)
-print('ADF Statistic: %f' % result[0])
-print('p-value: %f' % result[1])
+# For total monthly sales
+adf_sales = adfuller(df_total['sales'].values, autolag=None)
+print('ADF Statistic: %f' % adf_sales[0])
+print('p-value: %f' % adf_sales[1])
 print('Critical Values:')
-for key, value in result[4].items():
+for key, value in adf_sales[4].items():
+	print('\t%s: %.3f' % (key, value))
+# For total monthly item count
+adf_cnt = adfuller(df_total['item_cnt_day'].values, autolag=None)
+print('ADF Statistic: %f' % adf_cnt[0])
+print('p-value: %f' % adf_cnt[1])
+print('Critical Values:')
+for key, value in adf_cnt[4].items():
 	print('\t%s: %.3f' % (key, value))
 # Per shop
 adf_results = []
 for i in range(n_shops):
-    sales = df_sales.loc[df_sales['shop_id']==i,'sales']
-    result = adfuller(sales.values, autolag=None)
-    adf_results.append(result)
+    if i not in [11,23,40]: # these shops were merged
+        sales = df_sales.loc[df_sales['shop_id']==i,'sales']
+        result = adfuller(sales.values, autolag=None)
+        adf_results.append(result)
 adf_results = pd.DataFrame(adf_results, columns = ['ADF stat','p-value','used lag','nobs','critical values'])
-
-# De-trending: 
-
-# De-seasonalization:
 
 # =============================================================================
 # DATA VISUALIZATION
