@@ -10,5 +10,5 @@ Queries.sql - script used to pull different datasets from the database.
 
 ### Python
 Data_Processing.py - script used to clean kaggle dataset for Tableau and forecasting models.  
-Model_MLP_Embedding.py - TensorFlow multilayer perceptron neural network utilizing entity embeddings for shop & item IDs. (Suboptimal)
+Model_MLP_Embedding.py - TensorFlow multilayer perceptron neural network utilizing entity embeddings for shop & item IDs. (Suboptimal)  
 Model_MLP_TargetEncoded.py - Uses Target Encoding instead. Currently the optimal model (MSE 0.0076)
