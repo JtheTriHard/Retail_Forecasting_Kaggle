@@ -97,7 +97,7 @@ output_layer = tf.keras.layers.Dense(1,name='output_layer')(new_layer)
 model = tf.keras.Model(inputs, output_layer, name = "MLP")
 model.compile(optimizer='adam',loss='mse')
 model.summary()
-tf.keras.utils.plot_model(model, r'C:\Users\jgron\SpyderProjects\Kaggle_Sales\Figures\MLP.png', show_shapes=True)
+tf.keras.utils.plot_model(model, 'YOUR_PATH', show_shapes=True)
 history = model.fit([train_x[:,0],train_x[:,1],train_x[:,2:]], train_y, batch_size = batchsize, epochs=n_epochs, 
                     validation_data=([test_x[:,0],test_x[:,1],test_x[:,2:]], test_y))
 
