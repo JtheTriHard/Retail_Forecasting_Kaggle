@@ -1,0 +1,115 @@
+# -*- coding: utf-8 -*-
+# Python 3.7
+# Joey G.
+
+# =============================================================================
+# HOUSE KEEPING
+
+# Import libraries
+import time
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
+from category_encoders import TargetEncoder
+
+# Confirm working directory
+print("Working Directory: ", os.getcwd())
+
+np.random.seed(123)
+tf.random.set_seed(123)
+df = pd.read_csv('YOUR_PATH')
+
+# =============================================================================
+# MODEL-SPECIFIC CLEANING
+
+# Merged duplicate shops in earlier step, broke consecutive shop IDs
+df['shop_id'], remap = pd.factorize(df['shop_id'])
+remap = remap.to_list()
+
+# Function to prepare data for model
+t_start = time.time()
+
+def as_input(df,target_name,drop_cols, scale_cols):
+    # Drop unnecessary features
+    df = df.drop(drop_cols,axis=1)
+    # Map month to unit circle
+    df['month'] = pd.DatetimeIndex(df['date']).month
+    df['month_x'] = np.sin(2 * np.pi * df['month']/12)
+    df['month_y'] = np.cos(2 * np.pi * df['month']/12)
+    df = df.drop(['date','month'],axis=1)
+    # Train-Test split
+    X = df.drop(target_name,axis=1)
+    y = df[target_name]
+    x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.1, 
+                                                        random_state=123) # remove random_state if calling multiple times
+    # Target encode shop_id & item_id
+    shop_encoder = TargetEncoder(cols = 'shop_id')
+    x_train = shop_encoder.fit_transform(x_train,y_train)
+    x_test = shop_encoder.transform(x_test)
+    item_encoder = TargetEncoder(cols='item_id')
+    x_train = item_encoder.fit_transform(x_train,y_train)
+    x_test = item_encoder.transform(x_test)
+    # Scaling
+    input_scaler = MinMaxScaler(feature_range = (-1,1))
+    x_train[scale_cols] = input_scaler.fit_transform(x_train[scale_cols])
+    x_test[scale_cols] = input_scaler.transform(x_test[scale_cols])
+    output_scaler = MinMaxScaler(feature_range = (-1,1))
+    y_train = output_scaler.fit_transform(y_train.to_numpy().reshape(-1,1))
+    y_test = output_scaler.transform(y_test.to_numpy().reshape(-1, 1))
+    return x_train, x_test, y_train, y_test, output_scaler
+
+drop_cols = ['item_price','sales','new_category','date_block_num'] # cat temp removed
+scale_cols = ['shop_id', 'item_id']
+x_train, x_test, y_train, y_test, output_scaler = as_input(df,'item_cnt_day', drop_cols, scale_cols)
+t_end = time.time() - t_start
+
+# =============================================================================
+# MODEL
+
+# Parameters
+n_epochs = 100
+batchsize = 16384
+n_inputs = x_train.shape[1]
+
+tf.keras.backend.clear_session()
+
+# MLP using TF-Keras Functional API
+input_layer = tf.keras.layers.Input(shape=(n_inputs,), name="inputs")
+new_layer= tf.keras.layers.Dense(32,activation='tanh',name='MLP_1')(input_layer)
+new_layer = tf.keras.layers.Dropout(0.2,name='Dropout_1')(new_layer)
+new_layer= tf.keras.layers.Dense(16,activation='tanh',name='MLP_2')(new_layer)
+new_layer = tf.keras.layers.Dropout(0.2,name='Dropout_2')(new_layer)
+output_layer = tf.keras.layers.Dense(1,name='output_layer')(new_layer)
+model = tf.keras.Model(input_layer, output_layer, name = "MLP_TargetEncoded")
+model.compile(optimizer='adam',loss='mse')
+model.summary()
+tf.keras.utils.plot_model(model, 'YOUR_PATH', show_shapes=True)
+history = model.fit(x_train, y_train, batch_size = batchsize, epochs=n_epochs, 
+                    validation_data=(x_test, y_test))
+
+# =============================================================================
+# EVALUATE
+
+# Plot Train-Test MSE
+def plot_train_history(history):
+    loss = history.history['loss']
+    val_loss = history.history['val_loss']
+    epoch_range = range(len(loss))
+    plt.figure()
+    plt.plot(epoch_range, loss, label='Training loss')
+    plt.plot(epoch_range, val_loss, label='Validation loss')
+    #plt.title(title)
+    plt.ylabel('MSE (Scaled)')
+    plt.xlabel('Epochs')
+    plt.legend()
+    plt.show()
+plot_train_history(history)
+
+# Predict
+yhat = model.predict(x_test)
+yhat = np.rint(output_scaler.inverse_transform(yhat))
